@@ -1,0 +1,8 @@
+# Normaliza finais de linha no repositório.
+* text=auto
+
+# Os scripts embutidos nos workflows rodam em bash no runner Linux:
+# um CRLF aqui quebraria o shebang e os heredocs.
+*.sh text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf

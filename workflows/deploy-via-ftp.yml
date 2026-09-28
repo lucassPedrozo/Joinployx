@@ -1,0 +1,208 @@
+# Gerado pelo painel Joinvix Deploy. Alteracoes manuais serao sobrescritas.
+# joinvix-deploy-template: 4
+name: Deploy via FTP
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Simular o envio sem gravar arquivos no servidor
+        type: boolean
+        default: false
+__AUTO_DEPLOY_TRIGGER__
+concurrency:
+  group: deploy-ftp-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Build and publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    environment: production
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Guard production branch
+        if: github.ref_name != '__DEFAULT_BRANCH__'
+        shell: bash
+        run: |
+          echo "::error::Deploy via FTP must be executed from the repository default branch."
+          exit 1
+
+      - name: Validate deployment configuration
+        id: config
+        shell: bash
+        env:
+          DEPLOY_DOMAIN: ${{ secrets.DEPLOY_DOMAIN }}
+          FTP_SERVER: ${{ secrets.FTP_SERVER }}
+          FTP_LOGIN: ${{ secrets.FTP_LOGIN }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+          FTP_SERVER_DIR: ${{ secrets.FTP_SERVER_DIR }}
+          FTP_PORT: ${{ secrets.FTP_PORT }}
+        run: |
+          missing=0
+
+          for name in DEPLOY_DOMAIN FTP_SERVER FTP_LOGIN FTP_PASSWORD; do
+            if [ -z "${!name}" ]; then
+              echo "::error::O secret $name nao esta configurado. Reconfigure o repositorio pelo painel de deploy."
+              missing=1
+            fi
+          done
+
+          if [ "$missing" -ne 0 ]; then
+            exit 1
+          fi
+
+          server_dir="${FTP_SERVER_DIR:-domains/${DEPLOY_DOMAIN}/public_html}"
+          server_dir="${server_dir%/}/"
+
+          case "$server_dir" in
+            *..*) echo "::error::FTP_SERVER_DIR nao pode conter '..'."; exit 1 ;;
+          esac
+
+          {
+            echo "server-dir=$server_dir"
+            echo "port=${FTP_PORT:-21}"
+          } >> "$GITHUB_OUTPUT"
+
+          echo "Destino remoto: $server_dir"
+
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Detect package manager
+        id: package-manager
+        shell: bash
+        run: |
+          __DETECT_PACKAGE_MANAGER__
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: ${{ steps.package-manager.outputs.cache }}
+
+      - name: Setup Bun
+        if: steps.package-manager.outputs.manager == 'bun'
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Enable Corepack
+        if: steps.package-manager.outputs.manager == 'pnpm' || steps.package-manager.outputs.manager == 'yarn'
+        shell: bash
+        run: corepack enable
+
+      - name: Install dependencies and build
+        shell: bash
+        env:
+          PACKAGE_MANAGER: ${{ steps.package-manager.outputs.manager }}
+          BUILD_ENV_FILE: ${{ secrets.BUILD_ENV_FILE }}
+        run: |
+          __INSTALL_AND_BUILD__
+
+      - name: Resolve build output
+        id: build-output
+        shell: bash
+        env:
+          PUBLISH_DIR: ${{ vars.PUBLISH_DIR }}
+          SPA_FALLBACK: ${{ vars.SPA_FALLBACK }}
+        run: |
+          __RESOLVE_BUILD_OUTPUT__
+
+      - name: Select transfer protocol
+        id: protocol
+        shell: bash
+        env:
+          FTP_PROTOCOL: ${{ secrets.FTP_PROTOCOL }}
+          FTP_SERVER: ${{ secrets.FTP_SERVER }}
+          FTP_LOGIN: ${{ secrets.FTP_LOGIN }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+          FTP_PORT: ${{ steps.config.outputs.port }}
+        run: |
+          if [ -n "$FTP_PROTOCOL" ]; then
+            echo "protocol=$FTP_PROTOCOL" >> "$GITHUB_OUTPUT"
+            echo "Protocolo definido manualmente: $FTP_PROTOCOL"
+            exit 0
+          fi
+
+          # Preferir FTPS explicito; cair para FTP simples apenas se o servidor
+          # nao aceitar AUTH TLS. As credenciais vao pela stdin do curl para
+          # nao aparecerem na lista de processos do runner.
+          escape() { printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'; }
+
+          if printf 'user = "%s:%s"\n' "$(escape "$FTP_LOGIN")" "$(escape "$FTP_PASSWORD")" \
+            | curl --config - --ssl-reqd --connect-timeout 15 --max-time 30 --silent --show-error \
+              "ftp://$FTP_SERVER:$FTP_PORT/" --output /dev/null; then
+            echo "protocol=ftps" >> "$GITHUB_OUTPUT"
+            echo "FTPS explicito disponivel; o envio sera criptografado."
+          else
+            echo "protocol=ftp" >> "$GITHUB_OUTPUT"
+            echo "::warning::O servidor nao aceitou FTPS explicito. O envio usara FTP simples, sem criptografia."
+          fi
+
+      - name: Upload via FTP
+        id: upload
+        uses: SamKirkland/FTP-Deploy-Action@v4.4.0
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_LOGIN }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          port: ${{ steps.config.outputs.port }}
+          protocol: ${{ steps.protocol.outputs.protocol }}
+          local-dir: ${{ steps.build-output.outputs.dist-dir }}/
+          server-dir: ${{ steps.config.outputs.server-dir }}
+          state-name: .ftp-deploy-sync-state.json
+          dry-run: ${{ inputs.dry_run == true }}
+          log-level: standard
+          exclude: |
+            **/.git*
+            **/.git*/**
+            **/node_modules/**
+            **/.DS_Store
+            **/Thumbs.db
+
+      - name: Publication summary
+        if: always()
+        shell: bash
+        env:
+          DEPLOY_DOMAIN: ${{ secrets.DEPLOY_DOMAIN }}
+          DIST_DIR: ${{ steps.build-output.outputs.dist-dir }}
+          SERVER_DIR: ${{ steps.config.outputs.server-dir }}
+          PROTOCOL: ${{ steps.protocol.outputs.protocol }}
+          DRY_RUN: ${{ inputs.dry_run == true }}
+          UPLOAD_OUTCOME: ${{ steps.upload.outcome }}
+        run: |
+          # Quando o envio nao aconteceu, uma tabela de publicacao com campos
+          # vazios passa a impressao errada de que algo foi publicado.
+          if [ "$UPLOAD_OUTCOME" != "success" ]; then
+            {
+              echo "### Publicacao nao concluida"
+              echo ""
+              echo "Nenhum arquivo foi enviado. O passo que falhou esta destacado acima."
+              if [ -n "$DIST_DIR" ]; then
+                echo ""
+                echo "Pasta de build detectada: \`$DIST_DIR\`"
+              else
+                echo ""
+                echo "O build nao produziu uma pasta publicavel."
+              fi
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          {
+            echo "### Publicacao concluida"
+            echo ""
+            echo "| Item | Valor |"
+            echo "| --- | --- |"
+            echo "| Dominio | $DEPLOY_DOMAIN |"
+            echo "| Pasta local | \`$DIST_DIR\` |"
+            echo "| Pasta remota | \`$SERVER_DIR\` |"
+            echo "| Protocolo | $PROTOCOL |"
+            echo "| Simulacao | $DRY_RUN |"
+          } >> "$GITHUB_STEP_SUMMARY"
