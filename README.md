@@ -25,6 +25,12 @@ O painel foi desenhado para rodar na propria maquina ou na rede local: por padra
 
 ```text
 .
+|-- assets/
+|   `-- [project_images]/
+|       |-- img1.jpg
+|       |-- img2.jpg
+|       |-- img3.jpg
+|       `-- img4.jpg
 |-- docs/
 |   `-- GUIA-OPERACIONAL.md
 |-- public/
@@ -131,4 +137,9 @@ Permissoes do token, acesso pela rede local, secrets gerados, deteccao de build 
 
 **Imagens:**
 
-- Ainda nao ha capturas de tela versionadas.
+- `assets/[project_images]/img1.jpg`
+- `assets/[project_images]/img2.jpg`
+- `assets/[project_images]/img3.jpg`
+- `assets/[project_images]/img4.jpg`
+
+As capturas foram geradas com dados ficticios (organizacao `acme-sites`), sem nenhuma credencial real.
