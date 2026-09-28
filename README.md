@@ -26,8 +26,7 @@ O painel foi desenhado para rodar na propria maquina ou na rede local: por padra
 ```text
 .
 |-- docs/
-|   |-- GUIA-OPERACIONAL.md
-|   `-- PRONTIDAO-PRODUCAO.md
+|   `-- GUIA-OPERACIONAL.md
 |-- public/
 |   `-- favicon.png
 |-- scripts/
@@ -84,7 +83,7 @@ npm run check
 npm audit
 ```
 
-Permissoes do token, acesso pela rede local, secrets gerados, deteccao de build e politica de rede estao detalhados em [`docs/GUIA-OPERACIONAL.md`](docs/GUIA-OPERACIONAL.md). O checklist de producao esta em [`docs/PRONTIDAO-PRODUCAO.md`](docs/PRONTIDAO-PRODUCAO.md).
+Permissoes do token, acesso pela rede local, secrets gerados, deteccao de build e politica de rede estao detalhados em [`docs/GUIA-OPERACIONAL.md`](docs/GUIA-OPERACIONAL.md).
 
 ## Stacks
 

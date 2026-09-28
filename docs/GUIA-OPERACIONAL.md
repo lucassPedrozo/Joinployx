@@ -197,8 +197,6 @@ npm audit
 
 Os testes cobrem a política de rede, o bloqueio progressivo de autenticação, a leitura do `.env`, a geração dos workflows (inclusive validação do YAML resultante) e a detecção da pasta de build em cada layout suportado.
 
-O diagnóstico completo, os riscos conhecidos e o checklist de entrada em produção estão em [`PRONTIDAO-PRODUCAO.md`](PRONTIDAO-PRODUCAO.md).
-
 ## Estrutura
 
 ```text
