@@ -133,14 +133,20 @@ export function DeployDashboard() {
     }
   }, [handleApiError])
 
+  // Organização e servidor FTP padrão só chegam depois da chave de acesso.
+  const loadStatus = useCallback(async () => {
+    const apiStatus = await deployApi.getStatus()
+    setStatus(apiStatus)
+    if (apiStatus.defaultFtpHost) {
+      setSettings((current) => (current.ftpServer ? current : { ...current, ftpServer: apiStatus.defaultFtpHost }))
+    }
+    return apiStatus
+  }, [])
+
   const initialize = useCallback(async () => {
     try {
       setStartupError('')
-      const apiStatus = await deployApi.getStatus()
-      setStatus(apiStatus)
-      if (apiStatus.defaultFtpHost) {
-        setSettings((current) => (current.ftpServer ? current : { ...current, ftpServer: apiStatus.defaultFtpHost }))
-      }
+      const apiStatus = await loadStatus()
       if (!apiStatus.githubConfigured) {
         setNotice({ kind: 'warning', title: 'GitHub não configurado', message: 'Defina GITHUB_TOKEN no servidor antes de usar o painel.' })
       }
@@ -152,7 +158,7 @@ export function DeployDashboard() {
     } catch (error) {
       setStartupError(error instanceof Error ? error.message : 'A API web não respondeu.')
     }
-  }, [loadRepos])
+  }, [loadRepos, loadStatus])
 
   useEffect(() => {
     void Promise.resolve().then(initialize)
@@ -215,8 +221,10 @@ export function DeployDashboard() {
     storeAccessToken(token)
     setAccessError('')
     const success = await loadRepos()
-    if (success) setAccessRequired(false)
-    else setAccessError('Não foi possível entrar com esta chave.')
+    if (success) {
+      setAccessRequired(false)
+      await loadStatus().catch(() => undefined)
+    } else setAccessError('Não foi possível entrar com esta chave.')
   }
 
   const updateSettings = (patch: Partial<PublicationSettings>) => {

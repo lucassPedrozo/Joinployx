@@ -1,5 +1,6 @@
 # Gerado pelo painel Joinvix Deploy. Alteracoes manuais serao sobrescritas.
-# joinvix-deploy-template: 4
+# joinvix-deploy-template: 5
+# As actions sao fixadas pelo SHA do commit: uma tag pode ser movida, um SHA nao.
 name: Deploy via FTP
 
 on:
@@ -72,7 +73,7 @@ jobs:
           echo "Destino remoto: $server_dir"
 
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
 
       - name: Detect package manager
         id: package-manager
@@ -81,16 +82,16 @@ jobs:
           __DETECT_PACKAGE_MANAGER__
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
           node-version: 22
           cache: ${{ steps.package-manager.outputs.cache }}
 
       - name: Setup Bun
         if: steps.package-manager.outputs.manager == 'bun'
-        uses: oven-sh/setup-bun@v2
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          bun-version: latest
+          bun-version: 1.4.2
 
       - name: Enable Corepack
         if: steps.package-manager.outputs.manager == 'pnpm' || steps.package-manager.outputs.manager == 'yarn'
@@ -147,7 +148,7 @@ jobs:
 
       - name: Upload via FTP
         id: upload
-        uses: SamKirkland/FTP-Deploy-Action@v4.4.0
+        uses: SamKirkland/FTP-Deploy-Action@110f9186c050f71550953127052e77650219c287 # v4.4.0
         with:
           server: ${{ secrets.FTP_SERVER }}
           username: ${{ secrets.FTP_LOGIN }}

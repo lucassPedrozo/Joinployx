@@ -47,7 +47,7 @@ export const renderWorkflow = (
  * Bump a cada mudança relevante nos templates. O painel compara este valor com
  * o marcador gravado no repositório para avisar quando o workflow está velho.
  */
-export const WORKFLOW_TEMPLATE_VERSION = '4'
+export const WORKFLOW_TEMPLATE_VERSION = '5'
 
 export const readTemplateVersion = (content: string) =>
   content.match(/^#\s*joinvix-deploy-template:\s*(\S+)\s*$/m)?.[1] ?? null

@@ -92,6 +92,22 @@ const assertAuthenticated = (req: IncomingMessage) => {
   authThrottle.reset(key)
 }
 
+/**
+ * O status é público, mas organização e servidor FTP só vão para quem já
+ * apresentou a chave. Uma chave errada conta como tentativa falha, para esta
+ * rota não virar um atalho de força bruta fora do bloqueio progressivo.
+ */
+const isAuthenticated = (req: IncomingMessage) => {
+  if (!getServerConfig().panelAccessToken) return true
+  if (!req.headers.authorization) return false
+  try {
+    assertAuthenticated(req)
+    return true
+  } catch {
+    return false
+  }
+}
+
 const assertMutationAllowed = (req: IncomingMessage) => {
   const decision = mutationLimiter.consume(getClientKey(req))
   if (!decision.allowed) {
@@ -480,12 +496,13 @@ export const handleApiRequest = async (req: IncomingMessage, res: ServerResponse
 
     if (url.pathname === '/api/status' && req.method === 'GET') {
       const config = getServerConfig()
+      const authenticated = isAuthenticated(req)
       sendJson(res, 200, {
         service: 'online',
         githubConfigured: Boolean(config.githubToken),
-        organization: config.organization,
+        organization: authenticated ? config.organization : '',
         authenticationRequired: Boolean(config.panelAccessToken),
-        defaultFtpHost: config.defaultFtpHost,
+        defaultFtpHost: authenticated ? config.defaultFtpHost : '',
         deployWorkflowFile: DEPLOY_WORKFLOW_FILE,
         workflowTemplateVersion: WORKFLOW_TEMPLATE_VERSION,
         setupRequired: !config.githubToken || !config.organization,
@@ -665,7 +682,7 @@ export const handleApiRequest = async (req: IncomingMessage, res: ServerResponse
     const status = isKnown ? error.status : 500
     // As mensagens vindas do GitHub já passaram por describeGitHubFailure, então
     // é seguro devolvê-las; qualquer outra exceção fica só no log do servidor.
-    const message = error instanceof Error ? error.message : 'Erro interno inesperado.'
+    const message = isKnown ? error.message : 'Erro interno inesperado.'
     const headers = error instanceof HttpError ? error.headers : undefined
     console.error(`[api] ${req.method ?? 'UNKNOWN'} ${req.url ?? '/'} -> ${status}:`, error)
     sendJson(res, status, { message }, headers)
